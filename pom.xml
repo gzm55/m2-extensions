@@ -40,16 +40,20 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- support maven [3.3.1, ) -->
+    <project.maven.min-version>3.3.1</project.maven.min-version>
     <maven.install.skip>true</maven.install.skip>
     <maven.deploy.skip>true</maven.deploy.skip>
 
-    <timestamp>${maven.build.timestamp}</timestamp>
     <maven.build.timestamp.format>yyyyMMdd-HHmmssSSS'Z'</maven.build.timestamp.format>
 
-    <!-- support maven [3.3.1, ) -->
-    <project.maven.min-version>3.3.1</project.maven.min-version>
-
     <sort.verifyFail>STOP</sort.verifyFail>
+
+    <unix.loader.begin.match>### BEGIN ${project.artifactId}:[^ ]* ###</unix.loader.begin.match>
+    <unix.loader.end.match>### END ${project.artifactId}:[^ ]* ###</unix.loader.end.match>
+    <unix.loader.begin.tag>### BEGIN ${project.artifactId}:${project.version} ###</unix.loader.begin.tag>
+    <unix.loader.end.tag>### END ${project.artifactId}:${project.version} ###</unix.loader.end.tag>
+    <unix.loader.eof.tag>### END OF FILE ${maven.build.timestamp} ###</unix.loader.eof.tag>
   </properties>
 
   <build>
@@ -71,6 +75,25 @@
       </plugins>
     </pluginManagement>
     <plugins>
+      <plugin>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.0.0-M1</version>
+        <executions>
+          <execution>
+            <id>enforce-maven</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireMavenVersion>
+                  <version>[${project.maven.min-version},)</version>
+                </requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>com.github.ekryd.sortpom</groupId>
         <artifactId>sortpom-maven-plugin</artifactId>
@@ -210,7 +233,6 @@
           <family>!windows</family>
         </os>
       </activation>
-      <!--
       <build>
         <plugins>
           <plugin>
@@ -224,7 +246,32 @@
                 </goals>
                 <configuration>
                   <target>
-                    <move file="${user.home}/.m2/ext" tofile="${user.home}/.m2/ext.${maven.build.timestamp}.bak" failonerror="false" quiet="true"/>
+                    <loadfile srcFile="${project.build.scriptSourceDirectory}/loader.sh" property="cat.loader"/>
+                    <echo file="${user.home}/.mavenrc" append="true" encoding="${project.build.sourceEncoding}">${unix.loader.eof.tag}</echo>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="g" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="(.)${unix.loader.eof.tag}$"/>
+                      <substitution expression="\1${line.separator}${unix.loader.eof.tag}"/>
+                    </replaceregexp>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="^(${unix.loader.end.match}$(.|\n)*)${unix.loader.eof.tag}$"/>
+                      <substitution expression="\1"/>
+                    </replaceregexp>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="^${unix.loader.begin.match}$(\n^#{0,2}([^#].*)?$)*\n+${unix.loader.end.match}$"/>
+                      <substitution expression="${unix.loader.begin.tag}${line.separator}${cat.loader}${line.separator}${unix.loader.end.tag}"/>
+                    </replaceregexp>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="^${unix.loader.eof.tag}$"/>
+                      <substitution expression="${unix.loader.begin.tag}${line.separator}${cat.loader}${line.separator}${unix.loader.end.tag}${line.separator}"/>
+                    </replaceregexp>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="^(${unix.loader.begin.match}$\n)\n+"/>
+                      <substitution expression="\1"/>
+                    </replaceregexp>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="\n+(\n^${unix.loader.end.match})$"/>
+                      <substitution expression="\1"/>
+                    </replaceregexp>
                   </target>
                 </configuration>
               </execution>
@@ -232,7 +279,6 @@
           </plugin>
         </plugins>
       </build>
-      -->
     </profile>
     <profile>
       <id>deploy-on-windows</id>
@@ -255,7 +301,7 @@
                 <configuration>
                   <target>
                     <echo level="warning">[WARN] Don't support windows to inject loading scripts into mavenrc_pre.cmd now!${line.separator}</echo>
-                    <echo level="warning">[WARN] You have to manually edit mavenrc_pre.cmd, and set MAVEN_OPTS to contain '-D-Dmaven.ext.class.path=[all jars in .m2/ext]'${line.separator}</echo>
+                    <echo level="warning">[WARN] You have to manually edit mavenrc_pre.cmd, and set MAVEN_OPTS to contain '-Dmaven.ext.class.path=[all jars in .m2/ext]'${line.separator}</echo>
                   </target>
                 </configuration>
               </execution>
