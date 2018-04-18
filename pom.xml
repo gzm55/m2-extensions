@@ -49,15 +49,16 @@
 
     <sort.verifyFail>STOP</sort.verifyFail>
 
+    <dollarChar>$</dollarChar>
     <unix.loader.begin.match>### BEGIN ${project.artifactId}:[^ ]* ###</unix.loader.begin.match>
     <unix.loader.end.match>### END ${project.artifactId}:[^ ]* ###</unix.loader.end.match>
     <unix.loader.begin.tag>### BEGIN ${project.artifactId}:${project.version} ###</unix.loader.begin.tag>
     <unix.loader.end.tag>### END ${project.artifactId}:${project.version} ###</unix.loader.end.tag>
-    <unix.loader.eof.tag>### END OF FILE ${maven.build.timestamp} ###</unix.loader.eof.tag>
+    <unix.loader.placeholder>### INSERT BY ${project.artifactId} ${maven.build.timestamp} ###</unix.loader.placeholder>
   </properties>
 
   <build>
-    <defaultGoal>clean install</defaultGoal>
+    <defaultGoal>clean deploy</defaultGoal>
     <pluginManagement>
       <plugins>
         <plugin>
@@ -246,24 +247,25 @@
                 </goals>
                 <configuration>
                   <target>
-                    <loadfile srcFile="${project.build.scriptSourceDirectory}/loader.sh" property="cat.loader"/>
-                    <echo file="${user.home}/.mavenrc" append="true" encoding="${project.build.sourceEncoding}">${unix.loader.eof.tag}</echo>
+                    <echo file="${user.home}/.mavenrc" append="true" encoding="${project.build.sourceEncoding}">${unix.loader.placeholder}${line.separator}</echo>
                     <replaceregexp file="${user.home}/.mavenrc" flags="g" encoding="${project.build.sourceEncoding}">
-                      <regexp pattern="(.)${unix.loader.eof.tag}$"/>
-                      <substitution expression="\1${line.separator}${unix.loader.eof.tag}"/>
+                      <regexp pattern="(.)${unix.loader.placeholder}$"/>
+                      <substitution expression="\1${line.separator}${unix.loader.placeholder}"/>
                     </replaceregexp>
-                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
-                      <regexp pattern="^(${unix.loader.end.match}$(.|\n)*)${unix.loader.eof.tag}$"/>
+                    <replaceregexp file="${user.home}/.mavenrc" flags="gsm" encoding="${project.build.sourceEncoding}">
+                      <regexp pattern="^(${unix.loader.end.match}$.*)${unix.loader.placeholder}$\n"/>
                       <substitution expression="\1"/>
                     </replaceregexp>
                     <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
-                      <regexp pattern="^${unix.loader.begin.match}$(\n^#{0,2}([^#].*)?$)*\n+${unix.loader.end.match}$"/>
-                      <substitution expression="${unix.loader.begin.tag}${line.separator}${cat.loader}${line.separator}${unix.loader.end.tag}"/>
+                      <regexp pattern="^${unix.loader.begin.match}$(\n^#{0,2}([^#].*)?$)*\n+^${unix.loader.end.match}$"/>
+                      <substitution expression="${unix.loader.placeholder}"/>
                     </replaceregexp>
-                    <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
-                      <regexp pattern="^${unix.loader.eof.tag}$"/>
-                      <substitution expression="${unix.loader.begin.tag}${line.separator}${cat.loader}${line.separator}${unix.loader.end.tag}${line.separator}"/>
-                    </replaceregexp>
+
+                    <loadfile property="unix.loader" srcFile="${project.build.scriptSourceDirectory}/loader.sh"/>
+                    <replace file="${user.home}/.mavenrc"
+                             token="${unix.loader.placeholder}"
+			     value="${unix.loader.begin.tag}${line.separator}: ${dollarChar}{M2_EXTENSIONS_HOME:='${maven.multiModuleProjectDirectory}'}${line.separator}${unix.loader}${line.separator}${unix.loader.end.tag}"
+                             encoding="${project.build.sourceEncoding}"/>
                     <replaceregexp file="${user.home}/.mavenrc" flags="gm" encoding="${project.build.sourceEncoding}">
                       <regexp pattern="^(${unix.loader.begin.match}$\n)\n+"/>
                       <substitution expression="\1"/>
